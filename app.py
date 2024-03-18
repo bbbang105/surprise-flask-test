@@ -1,24 +1,70 @@
 import ssl
-ssl._create_default_https_context = ssl._create_unverified_context # SSL 인증 비활성화 : 테스트 환경에서만 사용❗️
+ssl._create_default_https_context = ssl._create_unverified_context  # SSL 인증 비활성화 : 테스트 환경에서만 사용❗️
 
 from flask import Flask, render_template
-import pandas as pd
+from surprise import Reader, Dataset
+from surprise import KNNBasic
+import heapq
+from collections import defaultdict
 
 app = Flask(__name__)
 
+# ratings.csv 파일을 읽어 Surprise 데이터셋 생성
+reader = Reader(line_format='user item rating timestamp', sep=',', skip_lines=1)
+data = Dataset.load_from_file("ratings.csv", reader=reader)
+
+# Surprise 데이터셋을 훈련셋으로 변환
+trainSet = data.build_full_trainset()
+
+# 유사도 옵션 설정
+sim_options = {
+    'name': 'cosine',
+    'user_based': True
+}
+
+# KNNBasic 모델 초기화 및 훈련
+model = KNNBasic(sim_options=sim_options)
+model.fit(trainSet)
+
+# 유사도 행렬 계산
+simsMatrix = model.compute_similarities()
+
+def recommendForUser(userID, trainSet, simsMatrix, k=10):
+    testUserInnerID = trainSet.to_inner_uid(userID)
+    similarityRow = simsMatrix[testUserInnerID]
+
+    users = []
+    for innerID, score in enumerate(similarityRow):
+        if innerID != testUserInnerID:
+            users.append((innerID, score))
+
+    kNeighbors = heapq.nlargest(k, users, key=lambda t: t[1])
+
+    candidates = defaultdict(float)
+    for similarUser in kNeighbors:
+        innerID = similarUser[0]
+        userSimilarityScore = similarUser[1]
+        theirRatings = trainSet.ur[innerID]
+        for rating in theirRatings:
+            candidates[rating[0]] += rating[1] * userSimilarityScore
+
+    watched = {}
+    for itemID, rating in trainSet.ur[testUserInnerID]:
+        watched[itemID] = 1
+
+    recommendedItems = []
+    for itemID, ratingSum in sorted(candidates.items(), key=lambda k: k[1], reverse=True):
+        if not itemID in watched:
+            movieID = trainSet.to_raw_iid(itemID)
+            recommendedItems.append((movieID, ratingSum))
+
+    return recommendedItems
+
 @app.route('/')
 def index():
-    # 데이터 불러오기
-    movies = pd.read_csv("https://grepp-reco-test.s3.ap-northeast-2.amazonaws.com/movielens/movies.csv")
-    ratings = pd.read_csv("https://grepp-reco-test.s3.ap-northeast-2.amazonaws.com/movielens/ratings.csv")
-    
-    # 영화 정보 출력
-    movies_html = movies.head().to_html()
-
-    # 평점 정보 출력
-    ratings_html = ratings.head().to_html()
-
-    return render_template('index.html', movies_html=movies_html, ratings_html=ratings_html)
+    testUser = '85'
+    recommendedItems = recommendForUser(testUser, trainSet, simsMatrix)
+    return render_template('index.html', recommendedItems=recommendedItems)
 
 if __name__ == '__main__':
     app.run(debug=True)
