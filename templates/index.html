@@ -6,8 +6,34 @@
     <title>Movie Ratings</title>
 </head>
 <body>
-    <h1>Movie Ratings</h1>
-    <h2>Top 5 Movies</h2>
-    {{ movies_html|safe }}
+    <h1>Surprise Test</h1>
+    <h2>Movie Information</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Movie ID</th>
+                <th>Title</th>
+                <th>Genres</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{ movies_html|safe }}
+        </tbody>
+    </table>
+
+    <h2>Ratings Information</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>User ID</th>
+                <th>Movie ID</th>
+                <th>Rating</th>
+                <th>Timestamp</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{ ratings_html|safe }}
+        </tbody>
+    </table>
 </body>
 </html>

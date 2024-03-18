@@ -15,7 +15,10 @@ def index():
     # 영화 정보 출력
     movies_html = movies.head().to_html()
 
-    return render_template('index.html', movies_html=movies_html)
+    # 평점 정보 출력
+    ratings_html = ratings.head().to_html()
+
+    return render_template('index.html', movies_html=movies_html, ratings_html=ratings_html)
 
 if __name__ == '__main__':
     app.run(debug=True)
