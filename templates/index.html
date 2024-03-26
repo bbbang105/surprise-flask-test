@@ -7,32 +7,24 @@
 </head>
 <body>
     <h1>Surprise Test</h1>
-    <h2>Movie Information</h2>
+    
+    <h2>Recommended Movies</h2>
     <table>
         <thead>
             <tr>
                 <th>Movie ID</th>
                 <th>Title</th>
-                <th>Genres</th>
-            </tr>
-        </thead>
-        <tbody>
-            {{ movies_html|safe }}
-        </tbody>
-    </table>
-
-    <h2>Ratings Information</h2>
-    <table>
-        <thead>
-            <tr>
-                <th>User ID</th>
-                <th>Movie ID</th>
                 <th>Rating</th>
-                <th>Timestamp</th>
             </tr>
         </thead>
         <tbody>
-            {{ ratings_html|safe }}
+            {% for movie in recommendedItems %}
+            <tr>
+                <td>{{ movie[0] }}</td> <!-- Movie ID -->
+                <td>{{ movie[1] }}</td> <!-- Title -->
+                <td>{{ movie[2] }}</td> <!-- Rating -->
+            </tr>
+            {% endfor %}
         </tbody>
     </table>
 </body>
