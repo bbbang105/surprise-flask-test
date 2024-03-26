@@ -1,16 +1,31 @@
 from request_sender import send_get_request
 from association_calculator import calculate_association
+from surprise_model import build_collaborative_filtering_model, recommend_exhibitions_for_user
+import configparser
 
-# Spring Boot 애플리케이션의 엔드포인트 URL
-users_url = "http://localhost:8080/api/flask/users"
-exhibitions_url = "http://localhost:8080/api/flask/exhibitions"
-num_tags = 12  # 태그의 총 개수
+# 설정 파일 읽기
+config = configparser.ConfigParser()
+config.read('config.ini')
 
 # 사용자 정보 가져오기
-userInfos = send_get_request(users_url)
+users_url = config['Endpoints']['users_url']
+user_infos = send_get_request(users_url)
 
 # 전시회 정보 가져오기
-exhibitionInfos = send_get_request(exhibitions_url)
+exhibitions_url = config['Endpoints']['exhibitions_url']
+exhibition_infos = send_get_request(exhibitions_url)
 
 # 유저와 전시회 간의 연관성 계산
-calculate_association(userInfos, exhibitionInfos)
+association_infos = calculate_association(user_infos, exhibition_infos)
+
+# 협업 필터링 모델 훈련
+collaborative_filtering_model = build_collaborative_filtering_model(association_infos)
+
+# 사용자에게 전시회 추천 받기
+user_id = 100  # 사용자 ID 입력
+recommended_exhibitions = recommend_exhibitions_for_user(collaborative_filtering_model, user_id)
+
+# 전시회 추천 결과 출력
+print("Recommended Exhibitions for User", user_id, ":")
+for exhibition_id, weight in recommended_exhibitions:
+    print("- Exhibition ID:", exhibition_id, "|", "Weight:", weight)

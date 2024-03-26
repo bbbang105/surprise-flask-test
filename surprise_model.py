@@ -1,55 +1,45 @@
 from surprise import Reader, Dataset
 from surprise import KNNBasic
-import heapq
-from collections import defaultdict
 
-# ratings.csv 파일을 읽어 Surprise 데이터셋 생성
-reader = Reader(line_format='user item rating timestamp', sep=',', skip_lines=1)
-data = Dataset.load_from_file("ratings.csv", reader=reader)
+def build_collaborative_filtering_model(association_list):
+    # Surprise 데이터셋 생성
+    reader = Reader(rating_scale=(0, 1))
+    data = Dataset.load_from_df(association_list, reader)
 
-# Surprise 데이터셋을 훈련셋으로 변환
-trainSet = data.build_full_trainset()
+    # Surprise 모델 초기화 및 훈련
+    model = KNNBasic(sim_options={'name': 'cosine', 'user_based': True})
+    trainset = data.build_full_trainset()
+    model.fit(trainset)
 
-# 유사도 옵션 설정
-sim_options = {
-    'name': 'cosine',
-    'user_based': True
-}
+    return model
 
-# KNNBasic 모델 초기화 및 훈련
-model = KNNBasic(sim_options=sim_options)
-model.fit(trainSet)
+def recommend_exhibitions_for_user(model, userID, k=10):
+    testUserInnerID = model.trainset.to_inner_uid(userID)
+    sim_scores = model.sim[testUserInnerID]
 
-# 유사도 행렬 계산
-simsMatrix = model.compute_similarities()
+    # 이웃한 사용자들의 전시회 평가 정보를 가져옴
+    neighbors = model.get_neighbors(testUserInnerID, k=k)
+    recommended_exhibitions = {}  # 중복된 전시회를 방지하기 위해 딕셔너리를 사용
 
-def recommendForUser(userID, k=10):
-    testUserInnerID = trainSet.to_inner_uid(userID)
-    similarityRow = simsMatrix[testUserInnerID]
+    # 각 이웃 사용자가 선호하는 전시회를 가져와서 추천 리스트에 추가
+    for neighbor in neighbors:
+        neighbor_ratings = model.trainset.ur[neighbor]
+        for exhibitionID, rating in neighbor_ratings:
+            # 이미 추가된 전시회는 중복을 피하기 위해 가중치를 평균내어 업데이트
+            if exhibitionID in recommended_exhibitions:
+                recommended_exhibitions[exhibitionID].append(rating)
+            else:
+                recommended_exhibitions[exhibitionID] = [rating]
 
-    users = []
-    for innerID, score in enumerate(similarityRow):
-        if innerID != testUserInnerID:
-            users.append((innerID, score))
+    # 중복된 전시회를 제거하고 각 전시회의 가중치를 평균내어 업데이트
+    for exhibitionID, ratings in recommended_exhibitions.items():
+        weight = sum(ratings) / len(ratings)
+        # 소수 넷째 자리에서 반올림
+        weight_rounded = round(weight, 4)
+        recommended_exhibitions[exhibitionID] = weight_rounded
 
-    kNeighbors = heapq.nlargest(k, users, key=lambda t: t[1])
+    # 추천된 전시회 리스트를 가중치 기준으로 정렬
+    sorted_recommended_exhibitions = sorted(recommended_exhibitions.items(), key=lambda x: x[1], reverse=True)
 
-    candidates = defaultdict(float)
-    for similarUser in kNeighbors:
-        innerID = similarUser[0]
-        userSimilarityScore = similarUser[1]
-        theirRatings = trainSet.ur[innerID]
-        for rating in theirRatings:
-            candidates[rating[0]] += rating[1] * userSimilarityScore
-
-    watched = {}
-    for itemID, rating in trainSet.ur[testUserInnerID]:
-        watched[itemID] = 1
-
-    recommendedItems = []
-    for itemID, ratingSum in sorted(candidates.items(), key=lambda k: k[1], reverse=True):
-        if not itemID in watched:
-            movieID = trainSet.to_raw_iid(itemID)
-            recommendedItems.append((movieID, ratingSum))
-
-    return recommendedItems
+    # k개의 추천 전시회만을 반환
+    return sorted_recommended_exhibitions[:k]
