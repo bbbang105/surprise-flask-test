@@ -1,70 +1,16 @@
-import ssl
-ssl._create_default_https_context = ssl._create_unverified_context  # SSL 인증 비활성화 : 테스트 환경에서만 사용❗️
+from request_sender import send_get_request
+from association_calculator import calculate_association
 
-from flask import Flask, render_template
-from surprise import Reader, Dataset
-from surprise import KNNBasic
-import heapq
-from collections import defaultdict
+# Spring Boot 애플리케이션의 엔드포인트 URL
+users_url = "http://localhost:8080/api/flask/users"
+exhibitions_url = "http://localhost:8080/api/flask/exhibitions"
+num_tags = 12  # 태그의 총 개수
 
-app = Flask(__name__)
+# 사용자 정보 가져오기
+userInfos = send_get_request(users_url)
 
-# ratings.csv 파일을 읽어 Surprise 데이터셋 생성
-reader = Reader(line_format='user item rating timestamp', sep=',', skip_lines=1)
-data = Dataset.load_from_file("ratings.csv", reader=reader)
+# 전시회 정보 가져오기
+exhibitionInfos = send_get_request(exhibitions_url)
 
-# Surprise 데이터셋을 훈련셋으로 변환
-trainSet = data.build_full_trainset()
-
-# 유사도 옵션 설정
-sim_options = {
-    'name': 'cosine',
-    'user_based': True
-}
-
-# KNNBasic 모델 초기화 및 훈련
-model = KNNBasic(sim_options=sim_options)
-model.fit(trainSet)
-
-# 유사도 행렬 계산
-simsMatrix = model.compute_similarities()
-
-def recommendForUser(userID, trainSet, simsMatrix, k=10):
-    testUserInnerID = trainSet.to_inner_uid(userID)
-    similarityRow = simsMatrix[testUserInnerID]
-
-    users = []
-    for innerID, score in enumerate(similarityRow):
-        if innerID != testUserInnerID:
-            users.append((innerID, score))
-
-    kNeighbors = heapq.nlargest(k, users, key=lambda t: t[1])
-
-    candidates = defaultdict(float)
-    for similarUser in kNeighbors:
-        innerID = similarUser[0]
-        userSimilarityScore = similarUser[1]
-        theirRatings = trainSet.ur[innerID]
-        for rating in theirRatings:
-            candidates[rating[0]] += rating[1] * userSimilarityScore
-
-    watched = {}
-    for itemID, rating in trainSet.ur[testUserInnerID]:
-        watched[itemID] = 1
-
-    recommendedItems = []
-    for itemID, ratingSum in sorted(candidates.items(), key=lambda k: k[1], reverse=True):
-        if not itemID in watched:
-            movieID = trainSet.to_raw_iid(itemID)
-            recommendedItems.append((movieID, ratingSum))
-
-    return recommendedItems
-
-@app.route('/')
-def index():
-    testUser = '85'
-    recommendedItems = recommendForUser(testUser, trainSet, simsMatrix)
-    return render_template('index.html', recommendedItems=recommendedItems)
-
-if __name__ == '__main__':
-    app.run(debug=True)
+# 유저와 전시회 간의 연관성 계산
+calculate_association(userInfos, exhibitionInfos)
